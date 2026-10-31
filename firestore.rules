@@ -8,7 +8,8 @@ service cloud.firestore { match /databases/{db}/documents {
     match /players/{u} {
       allow read: if host() || request.auth.uid == u;
       allow create: if request.auth.uid == u && get(/databases/$(db)/documents/rounds/$(r)).data.status == 'waiting';
-      allow update: if host() || (request.auth.uid == u && request.resource.data.board == resource.data.board && request.resource.data.name == resource.data.name);
+      allow update: if host() || (request.auth.uid == u && request.resource.data.board == resource.data.board && request.resource.data.name == resource.data.name
+        && (request.resource.data.get('claimedAt', null) == resource.data.get('claimedAt', null) || request.resource.data.claimedAt == request.time));
       allow delete: if host();
     }
   }

@@ -1,7 +1,7 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bingo</title><link rel="stylesheet" href="style.css"></head><body><main id="app"></main>
 <script type="module">
 import {db,auth,fs,au,letter,esc} from "./common.js";
-const {doc,collection,onSnapshot,setDoc,updateDoc,getDoc,query,orderBy,arrayUnion,arrayRemove}=fs;
+const {doc,collection,onSnapshot,setDoc,updateDoc,getDoc,query,orderBy,arrayUnion,arrayRemove,serverTimestamp}=fs;
 const $=document.getElementById("app");
 let me,name=localStorage.bingoName||"",rounds=[],joined={},cur=null,R=null,P=null,un=[];
 const pd=()=>doc(db,"rounds",cur,"players",me.uid);
@@ -29,6 +29,6 @@ $.onclick=async e=>{const t=e.target.closest("[data-a]");if(!t)return;const a=t.
  if(a=="open")open(id);
  if(a=="back"){un.forEach(f=>f());un=[];cur=R=P=null;draw()}
  if(a=="mark"&&R.status=="live"){const n=+t.dataset.n;updateDoc(pd(),{marks:(P.marks||[]).includes(n)?arrayRemove(n):arrayUnion(n)})}
- if(a=="bingo")updateDoc(pd(),{claimed:true})};
+ if(a=="bingo")updateDoc(pd(),{claimed:true,claimedAt:serverTimestamp()})};
 draw();
 </script></body></html>
