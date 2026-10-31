@@ -1,0 +1,15 @@
+rules_version = '2';
+service cloud.firestore { match /databases/{db}/documents {
+  // CHANGE to the email of the host account you create in Firebase Auth
+  function host() { return request.auth != null && request.auth.token.email == 'host@example.com'; }
+  match /rounds/{r} {
+    allow read: if request.auth != null;
+    allow write: if host();
+    match /players/{u} {
+      allow read: if host() || request.auth.uid == u;
+      allow create: if request.auth.uid == u && get(/databases/$(db)/documents/rounds/$(r)).data.status == 'waiting';
+      allow update: if host() || (request.auth.uid == u && request.resource.data.board == resource.data.board && request.resource.data.name == resource.data.name);
+      allow delete: if host();
+    }
+  }
+}}

@@ -1,0 +1,34 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bingo</title><link rel="stylesheet" href="style.css"></head><body><main id="app"></main>
+<script type="module">
+import {db,auth,fs,au,letter,esc} from "./common.js";
+const {doc,collection,onSnapshot,setDoc,updateDoc,getDoc,query,orderBy,arrayUnion,arrayRemove}=fs;
+const $=document.getElementById("app");
+let me,name=localStorage.bingoName||"",rounds=[],joined={},cur=null,R=null,P=null,un=[];
+const pd=()=>doc(db,"rounds",cur,"players",me.uid);
+const genBoard=()=>{const b=Array(25).fill(0);for(let c=0;c<5;c++){const p=Array.from({length:15},(_,i)=>c*15+i+1).sort(()=>Math.random()-.5);for(let r=0;r<5;r++)b[r*5+c]=p[r]}b[12]=0;return b};
+au.signInAnonymously(auth);
+au.onAuthStateChanged(auth,u=>{if(!u||me)return;me=u;
+ onSnapshot(query(collection(db,"rounds"),orderBy("createdAt")),async s=>{
+  rounds=s.docs.map(d=>({id:d.id,...d.data()}));
+  for(const r of rounds)joined[r.id]=(await getDoc(doc(db,"rounds",r.id,"players",me.uid))).exists();
+  draw()})});
+function open(id){un.forEach(f=>f());cur=id;R=P=null;un=[onSnapshot(doc(db,"rounds",id),s=>{R=s.data();draw()}),onSnapshot(pd(),s=>{P=s.data();draw()})]}
+function draw(){
+ if(!name){$.innerHTML=`<h1>🎱 Bingo</h1><div class=card><p>Enter your name to register</p><div class=row><input id=n placeholder="Your name"><button data-a=reg>Register</button></div></div>`;return}
+ if(!cur){$.innerHTML=`<h1>Hi ${esc(name)}</h1><h3>Rounds</h3>`+(rounds.map(r=>`<div class="card row sp"><div><b>${esc(r.name)}</b> <span class=tag>${r.status}</span></div>${joined[r.id]?`<button data-a=open data-id=${r.id}>Open</button>`:r.status=="waiting"?`<button data-a=join data-id=${r.id}>Join</button>`:`<span class=tag>Closed</span>`}</div>`).join("")||"<p>No rounds yet.</p>");return}
+ if(!R||!P)return;
+ const c=R.called||[],mk=P.marks||[];
+ $.innerHTML=`<button class=g data-a=back>← Rounds</button><h2>${esc(R.name)} <span class=tag>${R.status}</span></h2>`
+ +(R.winner?`<div class=win>${R.winner.uid==me.uid?"🎉 You won!":"Winner: "+esc(R.winner.name)}</div>`:"")
+ +`<div class=card><div class=big>${R.last?letter(R.last)+" "+R.last:R.status=="waiting"?"Waiting…":"—"}</div><p class=chips>${[...c].reverse().map((n,i)=>`<span class="chip ${i?"":"last"}">${letter(n)}${n}</span>`).join("")}</p></div>`
+ +`<div class=card><div class=board>${[..."BINGO"].map(l=>`<div class=h>${l}</div>`).join("")}${P.board.map(n=>n?`<div class="${mk.includes(n)?"m":""}" data-a=mark data-n=${n}>${n}</div>`:`<div class=m>★</div>`).join("")}</div></div>`
+ +`<button data-a=bingo style="width:100%" ${P.claimed||R.status!="live"?"disabled":""}>${P.claimed?"Claim sent — waiting for host":"BINGO!"}</button>`}
+$.onclick=async e=>{const t=e.target.closest("[data-a]");if(!t)return;const a=t.dataset.a,id=t.dataset.id;
+ if(a=="reg"){const v=document.getElementById("n").value.trim();if(v){name=localStorage.bingoName=v;draw()}}
+ if(a=="join"){cur=id;await setDoc(pd(),{name,board:genBoard(),marks:[],claimed:false});joined[id]=true;open(id)}
+ if(a=="open")open(id);
+ if(a=="back"){un.forEach(f=>f());un=[];cur=R=P=null;draw()}
+ if(a=="mark"&&R.status=="live"){const n=+t.dataset.n;updateDoc(pd(),{marks:(P.marks||[]).includes(n)?arrayRemove(n):arrayUnion(n)})}
+ if(a=="bingo")updateDoc(pd(),{claimed:true})};
+draw();
+</script></body></html>

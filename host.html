@@ -1,0 +1,28 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bingo Host</title><link rel="stylesheet" href="style.css"></head><body><main id="app"></main>
+<script type="module">
+import {db,auth,fs,au,letter,validBoard,esc} from "./common.js";
+const {doc,collection,onSnapshot,addDoc,updateDoc,deleteDoc,getDocs,query,orderBy,arrayUnion}=fs;
+const $=document.getElementById("app");
+let rounds=[],sel=null,players=[],unP=null,started=false,err="";
+au.onAuthStateChanged(auth,u=>{
+ if(u&&u.email){if(!started){started=true;onSnapshot(query(collection(db,"rounds"),orderBy("createdAt")),s=>{rounds=s.docs.map(d=>({id:d.id,...d.data()}));draw()})}}
+ else login()});
+function login(){$.innerHTML=`<h1>Host login</h1><div class=card><div class=row><input id=e placeholder=email><input id=p type=password placeholder=password><button data-a=login>Sign in</button></div><p>${esc(err)}</p></div>`}
+const win=(p,c)=>validBoard(p.board)&&p.board.every(n=>!n||c.includes(n));
+function detail(r){const c=r.called||[];return `<div class=card><h2>${esc(r.name)}</h2><div class=row>${r.status=="waiting"?`<button data-a=start>Start round</button>`:""}${r.status=="live"?`<button data-a=next>Next number</button><button class=g data-a=end>End round</button>`:""}</div>
+<div class=big>${r.last?letter(r.last)+" "+r.last:"—"}</div><p>${c.length}/75 announced</p><p class=chips>${[...c].reverse().map((n,i)=>`<span class="chip ${i?"":"last"}">${letter(n)}${n}</span>`).join("")}</p>${r.winner?`<div class=win>Winner: ${esc(r.winner.name)}</div>`:""}</div>
+<div class=card><h3>Players (${players.length})</h3>${players.map(p=>{const ok=p.claimed&&win(p,c);return `<div class="row sp"><span>${esc(p.name)} ${p.claimed?`<span class=tag>BINGO claimed ${ok?"✅ valid full house":"❌ not valid yet"}</span>`:""}</span>${ok&&!r.winner?`<button data-a=win data-id=${p.id}>Declare winner</button>`:""}</div>`}).join("")||"No players yet."}</div>`}
+function draw(){const v=document.getElementById("rn")?.value||"",r=rounds.find(x=>x.id==sel);
+ $.innerHTML=`<h1>🎙️ Host</h1><div class=card><div class=row><input id=rn placeholder="Round name" value="${esc(v)}"><button data-a=add>Add round</button></div></div>`
+ +rounds.map(x=>`<div class="card row sp"><div><b>${esc(x.name)}</b> <span class=tag>${x.status}</span></div><div class=row><button class=g data-a=sel data-id=${x.id}>Open</button><button class=g data-a=del data-id=${x.id}>Remove</button></div></div>`).join("")
+ +(r?detail(r):"")}
+$.onclick=async e=>{const t=e.target.closest("[data-a]");if(!t)return;const a=t.dataset.a,id=t.dataset.id,r=rounds.find(x=>x.id==sel),rd=()=>doc(db,"rounds",sel);
+ if(a=="login"){try{await au.signInWithEmailAndPassword(auth,document.getElementById("e").value,document.getElementById("p").value)}catch(x){err=x.code;login()}}
+ if(a=="add"){const v=document.getElementById("rn").value.trim()||"Round "+(rounds.length+1);await addDoc(collection(db,"rounds"),{name:v,status:"waiting",called:[],last:null,winner:null,createdAt:Date.now()})}
+ if(a=="sel"){unP&&unP();sel=id;players=[];unP=onSnapshot(collection(db,"rounds",id,"players"),s=>{players=s.docs.map(d=>({id:d.id,...d.data()}));draw()});draw()}
+ if(a=="del"&&confirm("Remove this round?")){(await getDocs(collection(db,"rounds",id,"players"))).forEach(d=>deleteDoc(d.ref));deleteDoc(doc(db,"rounds",id));if(sel==id){unP&&unP();sel=null;players=[]}}
+ if(a=="start")updateDoc(rd(),{status:"live"});
+ if(a=="end")updateDoc(rd(),{status:"ended"});
+ if(a=="next"){const left=[...Array(75)].map((_,i)=>i+1).filter(n=>!(r.called||[]).includes(n));if(!left.length)return;const n=left[Math.random()*left.length|0];updateDoc(rd(),{called:arrayUnion(n),last:n})}
+ if(a=="win"){const p=players.find(x=>x.id==id);updateDoc(rd(),{winner:{uid:id,name:p.name},status:"ended"})}};
+</script></body></html>
